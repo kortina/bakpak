@@ -25,3 +25,13 @@ someprogthatdoesntexist
 if [ "$?" -ne 0 ]; then echo "failed. someprogthatdoesntexist exited non-zero"; fi;
 echo "a"
 if [ "$?" -ne 0 ]; then echo "this won't print cause echo exited 0"; fi;
+
+
+# symlinks
+ln -s /path/target /path/to/symlink
+## update existing symlink to file
+ln -sf /new/targetfile /path/to/symlink
+## update existing symlink to directory
+ln -sfn /new/targetdir /path/to/symlink
+
+

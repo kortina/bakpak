@@ -1,0 +1,3 @@
+
+/joe/s-2
+search for joe and place the cursor at the start of the match, minus two characters.
