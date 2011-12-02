@@ -1,0 +1,1 @@
+javascript:document.body.style['margin-top'] = '20px'; var el = document.createElement('div'); el.innerHTML = '<textarea style="height:40px; width:800px; font-size:10px; z-index:9999999999999; position:absolute; top:0; left:0; width:75%">curl -b "'+(document.cookie.toString().replace(/"/g, '')) +'" "'+document.location.toString() + '"</textarea>'; document.body.appendChild(el);
