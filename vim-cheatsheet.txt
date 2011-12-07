@@ -1,3 +1,6 @@
 
 /joe/s-2
 search for joe and place the cursor at the start of the match, minus two characters.
+
+/the\>
+search for "the" but not "then" using the word boundary character
