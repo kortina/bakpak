@@ -34,4 +34,10 @@ ln -sf /new/targetfile /path/to/symlink
 ## update existing symlink to directory
 ln -sfn /new/targetdir /path/to/symlink
 
+# test if a file is a symlink or not
+test -h /path/possible_sym || echo "possible_sym is NOT a symlink"
+test -h /path/possible_sym && echo "possible_sym IS a symlink"
 
+
+# file renaming util
+for i in *.avi; do j=`echo $i | sed 's/find/replace/g'`; mv "$i" "$j"; done
