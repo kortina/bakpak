@@ -41,7 +41,8 @@ test -h /path/possible_sym && echo "possible_sym IS a symlink"
 
 # file renaming util
 for i in *.avi; do j=`echo $i | sed 's/find/replace/g'`; mv "$i" "$j"; done
-
+# alternative way to rename files in directory
+ls -1 | while read f; do mv "$f" "1-$f" ; done;
 
 # ssh tunnel
 # http://blog.kenweiner.com/2007/09/reverse-ssh-tunnel-for-facebook.html
@@ -69,3 +70,7 @@ Forward requests made to localhost:27018 to remoteserver:27017
 
     ssh -N -i ./rsa_private_key -L 27018:localhost:27017 ubuntu@remoteserver.com
 
+
+# More awesome tips
+
+https://gist.github.com/376930
