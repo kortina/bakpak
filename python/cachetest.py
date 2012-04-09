@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import datetime
+import logging
 #
 import tornado.httpserver
 import tornado.ioloop
@@ -6,7 +8,6 @@ import tornado.options
 import tornado.web
 
 from tornado.options import define, options
-import logging
 
 define("port", default=8888, help="run on the given port", type=int)
 
@@ -39,12 +40,37 @@ class CacheJsHandler(BaseHandler):
         self.print_and_set_headers(headers, do_print=False)
         self.write('window.cachedjs=1;')
 
+class CacheManifestHandler(BaseHandler):
+    def get(self):
+        logging.info(self)
+        html = """
+<!DOCTYPE HTML>
+<html manifest="c.appcache">
+ <head>
+  <title>Demo</title>
+ </head>
+ <body>
+  <p>The time is: %s</p>
+ </body>
+</html>
+""" % datetime.datetime.now()
+        self.write(html)
+
+class AppcacheHandler(BaseHandler):
+    def get(self):
+        logging.info(self)
+        self.write("CACHE MANIFEST\n")
+        self.write("cm\n")
+        headers = {"Content-Type": "text/cache-manifest"}
+        self.print_and_set_headers(headers)
 
 def main():
     tornado.options.parse_command_line()
     application = tornado.web.Application([
         (r"/", MainHandler),
         (r"/pr", CachePrivateHandler),
+        (r"/cm", CacheManifestHandler),
+        (r"/c.appcache", AppcacheHandler),
         (r"/cached.js", CacheJsHandler),
     ])
     http_server = tornado.httpserver.HTTPServer(application)
