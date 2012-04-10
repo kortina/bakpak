@@ -6,6 +6,7 @@ import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
+import re
 
 from tornado.options import define, options
 
@@ -13,7 +14,11 @@ define("port", default=8888, help="run on the given port", type=int)
 
 class BaseHandler(tornado.web.RequestHandler):
     def write_head(self):
-        self.write('<script type="text/javascript" src="/cached.js"></script>')
+        version = '1'
+        m = re.search(r"/[a-zA-Z_]+(\d+)", self.request.path)
+        if m and m.group(1):
+            version = m.group(1)
+        self.write('<script type="text/javascript" src="/cached%s.js"></script>' % version)
 
     def print_and_set_headers(self, headers, do_print=True):
         for k, v in headers.iteritems():
@@ -30,13 +35,13 @@ class CachePrivateHandler(BaseHandler):
     def get(self):
         logging.info(self)
         self.write_head()
-        headers = {"Cache-Control": "public, max-age=31104000"}
+        headers = {"Cache-Control": "public, max-age=60"}
         self.print_and_set_headers(headers)
 
 class CacheJsHandler(BaseHandler):
     def get(self):
         logging.info(self)
-        headers = {"Cache-Control": "public, max-age=31104000"}
+        headers = {"Cache-Control": "public, max-age=60"}
         self.print_and_set_headers(headers, do_print=False)
         self.write('window.cachedjs=1;')
 
@@ -61,17 +66,20 @@ class AppcacheHandler(BaseHandler):
         logging.info(self)
         self.write("CACHE MANIFEST\n")
         self.write("cm\n")
+        self.write("# 2010-06-18:v3\n")
+        self.write("\n")
+        self.write("# Explicitly cached entries\n")
         headers = {"Content-Type": "text/cache-manifest"}
-        self.print_and_set_headers(headers)
+        self.print_and_set_headers(headers, do_print=False)
 
 def main():
     tornado.options.parse_command_line()
     application = tornado.web.Application([
         (r"/", MainHandler),
-        (r"/pr", CachePrivateHandler),
-        (r"/cm", CacheManifestHandler),
+        (r"/pr\d{0,4}", CachePrivateHandler),
+        (r"/cm\d{0,4}", CacheManifestHandler),
         (r"/c.appcache", AppcacheHandler),
-        (r"/cached.js", CacheJsHandler),
+        (r"/cached\d{0,4}.js", CacheJsHandler),
     ])
     http_server = tornado.httpserver.HTTPServer(application)
     http_server.listen(options.port)
