@@ -35,7 +35,7 @@ class CachePrivateHandler(BaseHandler):
     def get(self):
         logging.info(self)
         self.write_head()
-        headers = {"Cache-Control": "public, max-age=60"}
+        headers = {"Cache-Control": "private, max-age=60"}
         self.print_and_set_headers(headers)
 
 class CacheJsHandler(BaseHandler):
