@@ -16,8 +16,14 @@ if __name__ == "__main__":
 min_iter = int(args.min or 0)
 max_iter = int(args.max or 0)
 
-filenames = os.listdir("./")
+email_dir = "./"
+filenames = os.listdir(email_dir)
 num_files = len(filenames)
+
+# create dir to hold attachments if does not exist
+attachments_dir = os.path.join(email_dir, "attachments")
+if not os.path.exists(attachments_dir):
+    os.makedirs(attachments_dir)
 
 for i, filename in enumerate(filenames):
     print "{0} / {1} : {2}".format(i, num_files, filename)
@@ -34,6 +40,7 @@ for i, filename in enumerate(filenames):
         if attachment_filename is None:
             continue
         write_filename = attachment_prefix + "_" + attachment_filename
+        write_filename = os.path.join(attachments_dir, write_filename)
         f = open(write_filename, 'wb')
         f.write(attachment.get_payload(decode=True,))
         f.close()
