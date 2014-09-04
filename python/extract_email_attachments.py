@@ -25,12 +25,20 @@ attachments_dir = os.path.join(email_dir, "attachments")
 if not os.path.exists(attachments_dir):
     os.makedirs(attachments_dir)
 
+
+def cleanup_name(name):
+    return re.sub(r"\W", "_", name)
+
+
 for i, filename in enumerate(filenames):
+    if i < min_iter:
+        continue
+
     print "{0} / {1} : {2}".format(i, num_files, filename)
     if not str.lower(filename[-3:]) == "eml":
         continue
+
     email_name = filename[0:-4]  # everything up to the .eml
-    attachment_prefix = re.sub(r"\W", "_", email_name)
     msg = email.message_from_file(open(filename))
     attachments = msg.get_payload()
     for j, attachment in enumerate(attachments):
@@ -39,7 +47,8 @@ for i, filename in enumerate(filenames):
         attachment_filename = attachment.get_filename()
         if attachment_filename is None:
             continue
-        write_filename = attachment_prefix + "_" + attachment_filename
+        write_filename = email_name + "_" + attachment_filename
+        write_filename = cleanup_name(write_filename)
         write_filename = os.path.join(attachments_dir, write_filename)
         f = open(write_filename, 'wb')
         f.write(attachment.get_payload(decode=True,))
