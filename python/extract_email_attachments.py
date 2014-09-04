@@ -50,8 +50,16 @@ for i, filename in enumerate(filenames):
         write_filename = email_name + "_" + attachment_filename
         write_filename = cleanup_name(write_filename)
         write_filename = os.path.join(attachments_dir, write_filename)
+        try:
+            payload = attachment.get_payload(decode=True,)
+        except TypeError as e:
+            print e  # invalid attachment
+            continue
+        if not payload:
+            continue  # invalid attachment
+
         f = open(write_filename, 'wb')
-        f.write(attachment.get_payload(decode=True,))
+        f.write(payload)
         f.close()
     if max_iter and i >= max_iter:
         break
