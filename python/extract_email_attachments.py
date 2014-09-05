@@ -27,7 +27,7 @@ if not os.path.exists(attachments_dir):
 
 
 def cleanup_name(name):
-    return re.sub(r"\W", "_", name)
+    return re.sub(r"[^\w\.]+", "_", name)
 
 
 for i, filename in enumerate(filenames):
