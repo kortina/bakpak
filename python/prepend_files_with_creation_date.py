@@ -36,7 +36,7 @@ def filename_starts_with_a_date(filepath):
 
 
 def file_is_image_or_movie(filename):
-    reg = re.compile(r"(jpg|jpeg|png|avi|mov|3gp)$", re.I)
+    reg = re.compile(r"(jpg|jpeg|png|avi|mov|3gp|tif)$", re.I)
     return re.search(reg, filename)
 
 
