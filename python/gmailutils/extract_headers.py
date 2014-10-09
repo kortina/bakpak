@@ -3,6 +3,10 @@ import os
 import sys
 import argparse
 from collections import Counter
+"""
+Works with .eml files you have downloaded with another script such as
+https://github.com/abjennings/gmail-backup
+"""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

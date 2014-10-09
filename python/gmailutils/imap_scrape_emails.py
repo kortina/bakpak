@@ -4,6 +4,10 @@ import sys
 import argparse
 from email.parser import HeaderParser
 import simplejson
+"""
+Find all people you've interacted with on email threads and print their email
+addresses.
+"""
 
 username = None
 password = None

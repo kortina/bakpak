@@ -3,6 +3,10 @@ import os
 import re
 import sys
 import argparse
+"""
+Works with .eml files you have downloaded with another script such as
+https://github.com/abjennings/gmail-backup
+"""
 
 username = None
 password = None
