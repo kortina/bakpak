@@ -1,0 +1,3 @@
+[submodule "amazon-ses-kortina"]
+	path = amazon-ses-kortina
+	url = https://github.com/kortina/amazon-ses-kortina
