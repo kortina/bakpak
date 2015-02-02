@@ -39,6 +39,12 @@ if __name__ == "__main__":
     parser.add_argument('--min')
     parser.add_argument('--max')
     parser.add_argument('--task')
+    parser.add_argument('-v', action='store_true', dest="verbose",
+                        help="Verbose output.")
+    parser.add_argument('-vv', action='store_true', dest="vverbose",
+                        help="Very verbose output.")
+    parser.add_argument('-vvv', action='store_true', dest="vvverbose",
+                        help="Very verbose output.")
     args = parser.parse_args(sys.argv[1:])
 
 
@@ -66,6 +72,7 @@ def normalize_string(string):
 
 def normalize_email(address):
     if address:
+        address = re.sub(r"['\<\>]", "", address)
         address = normalize_string(address)
         address = address.lower()
     return address
@@ -123,7 +130,8 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
     num_files = len(filenames)
 
     for i, filename in enumerate(filenames):
-        print "{0} / {1} : {2}".format(i, num_files, filename)
+        progress = "{0} / {1} : {2}".format(i, num_files, filename)
+        logging.info(progress)
         if not str.lower(filename[-3:]) == "eml":
             continue
 
@@ -134,6 +142,10 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
                 for person in tuples_for_address_list(v):
                     name = normalize_name(person[0])
                     email = normalize_email(person[1])
+                    if "," in email:
+                        emsg = "DISCARDING BAD EMAIL. person: {0} email: {1}"
+                        emsg = emsg.format(person, email)
+                        logging.warning(emsg)
                     combined = pair(name, email)
                     distinct_addresses.add(combined)
                     top_addresses[header][combined] += 1
@@ -185,6 +197,10 @@ class ParseEmailTests(TestCase):
     def test_normalize_name(self):
         self.assertEqual(normalize_name("\t\nAdam Smith "), "Adam Smith")
 
+    def test_domain(self):
+        self.assertEqual(email_domain("joe@test.net"), "test.net")
+        self.assertEqual(email_domain("joe,test.net"), None)
+
 
 def dict_factory(cursor, row):
     d = {}
@@ -193,8 +209,23 @@ def dict_factory(cursor, row):
     return d
 
 
+def email_domain(email):
+    """Assumes email has already been run through normalize_email to strip bad
+    chars"""
+    parts = email.split("@")
+    if len(parts) == 2:
+        return parts[1]
+    else:
+        return None
+
+
 class DB(object):
-    _FILTERS = ["accounts*@",
+    _FILTERS = ["@.*@",
+                "@bounce",
+                "@list",
+                "@mail\.asana",
+                "accounts*@",
+                "bounce.*@",
                 "customer.*@",
                 "disqus"
                 "hello@",
@@ -247,12 +278,15 @@ class DB(object):
                                 pair VARCHAR(255) UNIQUE,
                                 name VARCHAR(255),
                                 email VARCHAR(255),
+                                domain VARCHAR(255),
                                 occurs INT
                                 );""")
         klass.query("""CREATE INDEX IF NOT EXISTS
                                 name_ix ON contacts(name);""")
         klass.query("""CREATE INDEX IF NOT EXISTS
                                 email_ix ON contacts(email);""")
+        klass.query("""CREATE INDEX IF NOT EXISTS
+                                domain_ix ON contacts(domain);""")
 
     @classmethod
     def exclude(klass, email):
@@ -282,12 +316,18 @@ class DB(object):
     @classmethod
     def insert(klass, name, email):
         if DB.exclude(email) or DB.exclude_on_name(name):
-            logging.info("EXCLUDING: {0} {1}".format(name, email))
+            logging.warning("EXCLUDING: {0} {1}".format(name, email))
             return
         p = pair_lower(name, email)
-        sql = """INSERT INTO contacts (pair, name, email, occurs) \
-                 VALUES (?, ?, ?, 1);"""
-        return klass.query(sql, [p, name, email])
+        domain = email_domain(email)
+        if not domain:
+            emsg = "EXCLUDING, no domain: {0} {1}"
+            logging.warning(emsg.format(name, email))
+            return
+
+        sql = """INSERT INTO contacts (pair, name, email, domain, occurs) \
+                 VALUES (?, ?, ?, ?, 1);"""
+        return klass.query(sql, [p, name, email, domain])
 
     @classmethod
     def increment(klass, name, email):
@@ -383,12 +423,27 @@ class DBTests(TestCase):
 
         DB.delete(name, email)
 
+USEFUL_QUERIES = """
+popular domains:
+SELECT domain, COUNT(*) as c FROM contacts GROUP BY domain ORDER BY c;
+
+"""
 
 if __name__ == "__main__":
     min_iter = int(args.min or 0)
     max_iter = int(args.max or 0)
     task = args.task
     task_func = task_function(task)
+    if args.vvverbose:
+        logging.basicConfig(level=logging.DEBUG)
+        logging.debug("logging set to DEBUG")
+    elif args.vverbose:
+        logging.basicConfig(level=logging.INFO)
+        logging.info("logging set to INFO")
+    elif args.verbose:
+        logging.basicConfig(level=logging.WARNING)
+        logging.warning("logging set to WARNING")
+
     if not task_func:
         raise usage
     try:
