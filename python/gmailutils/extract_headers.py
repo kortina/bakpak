@@ -1,8 +1,16 @@
-import email
 import os
+import re
 import sys
 import argparse
 from collections import Counter
+from email import message_from_file
+from email.utils import getaddresses
+try:
+    from unittest2 import TestCase
+except ImportError:
+    from unittest import TestCase
+
+
 """
 Works with .eml files you have downloaded with another script such as
 https://github.com/abjennings/gmail-backup
@@ -43,11 +51,26 @@ for k in address_headers:
 distinct_addresses = set()
 
 
-def normalize(address):
+def normalize_string(string):
+    """strip, remove tabs and newlines. replace multi space with single spaces.
+    used for names and emails"""
+    if string:
+        string = re.sub(r"[\n\r\t\s]+", " ", string)
+        string = string.strip()
+    return string
+
+
+def normalize_email(address):
     if address:
-        address = address.strip()
+        address = normalize_string(address)
         address = address.lower()
     return address
+
+
+def normalize_name(name):
+    if name:
+        name = normalize_string(name)
+    return name
 
 
 def print_top():
@@ -84,19 +107,62 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0):
         if not str.lower(filename[-3:]) == "eml":
             continue
 
-        msg = email.message_from_file(open(filename))
+        msg = message_from_file(open(filename))
         for header in address_headers:
-            v = msg.get(header)
+            v = msg.get_all(header)
             if v:
-                people = v.split(",")
-                for p in people:
-                    p = normalize(p)
-                    distinct_addresses.add(p)
-                    # print "{0}: {1}".format(header, p)
-                    top_addresses[header][p] += 1
+                for person in tuples_for_address_list(v):
+                    name = normalize_name(person[0])
+                    email = normalize_email(person[1])
+                    combined = "\"{0}\"\t{1}".format(name, email)
+                    distinct_addresses.add(combined)
+                    top_addresses[header][combined] += 1
 
         if max_iter and i >= max_iter:
             break
+
+
+def tuples_for_address_list(value_list):
+    """Parse list returned by email.message.Message.get_all
+    https://docs.python.org/2/library/email.message.html#email.message.Message.get_all
+
+    eg, a list of the form
+    ['kortina@venmo.com, magdon@venmo.com, shreyans@venmo.com']
+    for an email with the 'to' header
+    'kortina@venmo.com, magdon@venmo.com, shreyans@venmo.com'
+
+    returns
+    [('', 'kortina@venmo.com'), ('', 'magdon@venmo.com'),
+     ('', 'shreyans@venmo.com')]
+    """
+    return getaddresses(value_list) or []
+
+
+class ParseEmailTests(TestCase):
+    def test_tuples(self):
+        header = """"Sandy [Test]" <sandy@test.com>, suzi@test.com"""
+        value_list = [header]
+        tuples = tuples_for_address_list(value_list)
+        expected_name = "Sandy [Test]"
+        expected_email = "sandy@test.com"
+        tup = tuples[0]
+        self.assertEqual(expected_name, tup[0])
+        self.assertEqual(expected_email, tup[1])
+        expected_name = ""
+        expected_email = "suzi@test.com"
+        tup = tuples[1]
+        self.assertEqual(expected_name, tup[0])
+        self.assertEqual(expected_email, tup[1])
+
+    def test_normalize_string(self):
+        self.assertEqual(normalize_string("\ta\r\n b "), "a b")
+
+    def test_normalize_email(self):
+        self.assertEqual(normalize_email("\t\nB@TEST.com "), "b@test.com")
+
+    def test_normalize_name(self):
+        self.assertEqual(normalize_name("\t\nAdam Smith "), "Adam Smith")
+
 
 if __name__ == "__main__":
     min_iter = int(args.min or 0)
