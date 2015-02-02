@@ -137,7 +137,6 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
                     combined = pair(name, email)
                     distinct_addresses.add(combined)
                     top_addresses[header][combined] += 1
-                    print combined
                     if task == "insert":
                         DB.insert_or_increment(name, email)
 
