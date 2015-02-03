@@ -61,11 +61,13 @@ distinct_addresses = set()
 
 
 def normalize_string(string):
-    """strip, double quotes, tabs, and newlines. replace multi space with
-    single spaces.
-    used for names and emails"""
+    """strip:
+    " | \t \r \n
+    and replace multi space with single spaces.
+
+    used for names and emails."""
     if string:
-        string = re.sub(r"[\"\n\r\t\s]+", " ", string)
+        string = re.sub(r"[\"\n\r\t\s\|]+", " ", string)
         string = string.strip()
     return string
 
@@ -81,7 +83,37 @@ def normalize_email(address):
 def normalize_name(name):
     if name:
         name = normalize_string(name)
+        # if no capitals or @'s , then titlecase
+        if not re.search(r"[A-Z@]", name):
+            name = name.title()
+        name = flip_last_first(name)
     return name
+
+
+def flip_last_first(name):
+    """Attempt to recognize name in
+    Last, First
+    form and flip to
+    First Last.
+
+    Try to be smart enough to correctly handle things like
+    Ken Griffey, Jr.
+    """
+    if not name:
+        return name
+    parts = name.split(",")
+    if len(parts) != 2:
+        return name
+    bef = parts[0].strip()
+    aft = parts[1].strip()
+    flipped = "{0} {1}".format(aft, bef)
+    if re.search(r"[\(\)\<\>\&]", aft):
+        return name
+    if re.search(r"^and ", aft) or re.search(r" and ", aft):
+        return name
+    if re.search(r"^\w{2,3}\.*$", aft):
+        return name
+    return flipped
 
 
 def pair(name, email):
@@ -172,6 +204,34 @@ def tuples_for_address_list(value_list):
     return getaddresses(value_list) or []
 
 
+class ParseNameTests(TestCase):
+    def test_last_first(self):
+        self.assertEqual(flip_last_first("Ken Griffey, Jr."),
+                         "Ken Griffey, Jr.")
+        self.assertEqual(flip_last_first("ken griffey, jr"),
+                         "ken griffey, jr")
+        self.assertEqual(flip_last_first("Smith, Mary Jo"),
+                         "Mary Jo Smith")
+        self.assertEqual(flip_last_first("Mary Smith, Esq."),
+                         "Mary Smith, Esq.")
+        self.assertEqual(flip_last_first("mary smith, esq"),
+                         "mary smith, esq")
+        self.assertEqual(flip_last_first("Anderson, Paul T"),
+                         "Paul T Anderson")
+        self.assertEqual(flip_last_first("Anderson, Paul T."),
+                         "Paul T. Anderson")
+        self.assertEqual(flip_last_first("Multiple, Commas, Noop"),
+                         "Multiple, Commas, Noop")
+        self.assertEqual(flip_last_first("Smith, Alex (US - New York)"),
+                         "Smith, Alex (US - New York)")
+        self.assertEqual(flip_last_first("Crosby, Stills, & Nash"),
+                         "Crosby, Stills, & Nash")
+        self.assertEqual(flip_last_first("Crosby, Stills, and Nash"),
+                         "Crosby, Stills, and Nash")
+        self.assertEqual(flip_last_first("Crosby, Stills and Nash"),
+                         "Crosby, Stills and Nash")
+
+
 class ParseEmailTests(TestCase):
     def test_tuples(self):
         header = """"Sandy [Test]" <sandy@test.com>, suzi@test.com"""
@@ -225,6 +285,7 @@ class DB(object):
                 "@list",
                 "@mail\.asana",
                 "@googlegroups",
+                "@\w+\.google\.com",
                 "accounts*@",
                 "alerts*@",
                 "^api@",
@@ -239,6 +300,8 @@ class DB(object):
                 "info@",
                 "^info",
                 "information@",
+                "invitations*@",
+                "members*@",
                 "munin",
                 "nagios",
                 "news@",
@@ -246,13 +309,18 @@ class DB(object):
                 "notifications*@",
                 "notifier@",
                 "notify@",
+                "orders*@",
                 "postmaster",
                 "reply",
                 "reports*@",
                 "support"]
     FILTERS = [re.compile(p, re.I) for p in _FILTERS]
 
-    _NAME_FILTERS = ["\?"]
+    _NAME_FILTERS = ["\?",
+                     "\<",
+                     "\<External\>",
+                     "Google Docs",
+                     "Google Drive"]
     NAME_FILTERS = [re.compile(p, re.I) for p in _NAME_FILTERS]
 
     @classmethod
@@ -443,6 +511,11 @@ SELECT domain, COUNT(*) as c FROM contacts GROUP BY domain ORDER BY c;
 
 popular contacts
 SELECT * FROM contacts ORDER BY occurs DESC LIMIT 500;
+
+alpha contacts
+SELECT name, email, domain, occurs FROM contacts
+WHERE name <> '' AND name NOT LIKE '%@%'
+ORDER BY name, occurs DESC;
 """
 
 if __name__ == "__main__":
