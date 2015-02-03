@@ -111,7 +111,19 @@ def flip_last_first(name):
         return name
     if re.search(r"^and ", aft) or re.search(r" and ", aft):
         return name
-    if re.search(r"^\w{2,3}\.*$", aft):
+    # 2-4 non-vowels, probably a suffix
+    if re.search(r"^[^aeiouyAEIOUY]{2,4}$", aft):
+        return name
+    # 2-4 roman numerals, probably a suffix
+    if re.search(r"^[ixvIXV]{2,4}$", aft):
+        return name
+    known_suffixes = ['cpa', 'do', 'edd', 'esq', 'inc', 'mba', 'od',
+                      'osb', 'ret', 'usa', 'usaf']
+    # known suffixes with vowels
+    if aft.lower().replace(".", "") in known_suffixes:
+        return name
+    # 2-3 letters followed by period, probably a suffix
+    if re.search(r"^\w{2,3}\.$", aft):
         return name
     return flipped
 
@@ -230,6 +242,16 @@ class ParseNameTests(TestCase):
                          "Crosby, Stills, and Nash")
         self.assertEqual(flip_last_first("Crosby, Stills and Nash"),
                          "Crosby, Stills and Nash")
+        self.assertEqual(flip_last_first("Smith, Amy"),
+                         "Amy Smith")
+        self.assertEqual(flip_last_first("John Davis, II"),
+                         "John Davis, II")
+        self.assertEqual(flip_last_first("John Davis, III"),
+                         "John Davis, III")
+        self.assertEqual(flip_last_first("John Davis, iv"),
+                         "John Davis, iv")
+        self.assertEqual(flip_last_first("John Davis, MBA"),
+                         "John Davis, MBA")
 
 
 class ParseEmailTests(TestCase):
