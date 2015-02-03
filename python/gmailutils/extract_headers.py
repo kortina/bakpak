@@ -224,17 +224,31 @@ class DB(object):
                 "@bounce",
                 "@list",
                 "@mail\.asana",
+                "@googlegroups",
                 "accounts*@",
+                "alerts*@",
+                "^api@",
                 "bounce.*@",
                 "customer.*@",
+                "daemon",
+                "developers*@",
+                "digests*@",
                 "disqus"
                 "hello@",
                 "help",
                 "info@",
+                "^info",
                 "information@",
+                "munin",
+                "nagios",
+                "news@",
                 "no.*reply",
+                "notifications*@",
+                "notifier@",
+                "notify@",
                 "postmaster",
                 "reply",
+                "reports*@",
                 "support"]
     FILTERS = [re.compile(p, re.I) for p in _FILTERS]
 
@@ -427,6 +441,8 @@ USEFUL_QUERIES = """
 popular domains:
 SELECT domain, COUNT(*) as c FROM contacts GROUP BY domain ORDER BY c;
 
+popular contacts
+SELECT * FROM contacts ORDER BY occurs DESC LIMIT 500;
 """
 
 if __name__ == "__main__":
