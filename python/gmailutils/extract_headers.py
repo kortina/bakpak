@@ -483,6 +483,7 @@ class DBTests(TestCase):
         self.assertTrue(DB.exclude("no-reply@test.com"))
         self.assertTrue(DB.exclude("support@test.com"))
         self.assertTrue(DB.exclude("accounts@test.com"))
+        self.assertTrue(DB.exclude("notification@test.com"))
         self.assertFalse(DB.exclude("joe@test.com"))
 
         self.assertTrue(DB.exclude_on_name("?Andrew"))
