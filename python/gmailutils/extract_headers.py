@@ -65,10 +65,14 @@ def normalize_string(string):
     " | \t \r \n
     and replace multi space with single spaces.
 
+    strip leading and trailing single and double quotes
+
     used for names and emails."""
     if string:
         string = re.sub(r"[\"\n\r\t\s\|]+", " ", string)
         string = string.strip()
+        string = string.strip("'")
+        string = string.strip('"')
     return string
 
 
@@ -308,6 +312,8 @@ class DB(object):
                 "@mail\.asana",
                 "@googlegroups",
                 "@\w+\.google\.com",
+                "@letter\.ly",
+                "@txt\.voice\.google",
                 "accounts*@",
                 "alerts*@",
                 "^api@",
