@@ -1,0 +1,8 @@
+PREFIX = Ctrl-b
+
+Scroll Up
+<PREFIX> [ # then you can use your normal navigation keys to scroll around (eg. Up Arrow or PgDn). Press q to quit scroll mode. http://superuser.com/questions/209437/how-do-i-scroll-in-tmux
+
+Increase Pane Size
+<PREFIX> :resize-pane -U 20 # Resizes the current pane upward by 20 cells https://gist.github.com/MohamedAlaa/2961058#resizing-panes
+NB: make sure to type ":" to enter the tmux command line entry mode.
