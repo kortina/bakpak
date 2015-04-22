@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Simple wrapper that uses ag if possible, falls back to ack.
+
+AG_CMD=`which ag`
+ACK_CMD=`which ack`
+
+if [ -n "$AG_CMD" ]; then
+    if [ -d .git ]; then
+        ag $*
+        exit 0
+    fi
+fi
+if [ -n "$ACK_CMD" ]; then
+    ack $*
+    exit 0
+fi
+
+echo "ERROR: Neither ack nor ag is installed."
+exit 1
