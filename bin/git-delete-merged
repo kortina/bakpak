@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# via: https://github.com/dcosson/dotfiles/blob/master/misc/git-delete-merged
+
+# Deletes all local branches that are set up to track a remote branch on the origin remote, where the
+# remote branch has been deleted.
+#
+# Note that this will not delete a branch that you've pushed to remote but did not set to track. So
+# you need to do e.g. `push -u` for this script to be able to clean up the branch later.
+
+set -e
+
+echo 'Fetching remote branches'
+git fetch --prune 2>/dev/null
+
+remote_branches () {
+    git branch -l -a | grep --color=never 'remotes/origin' | tr -d '* ' | grep -v HEAD | sed 's/remotes\/origin\///'
+}
+local_branches_with_tracking () {
+    git remote show origin | grep 'merges with remote' | awk '{print $1}'
+}
+
+count=0
+for branch in $(diff --new-line-format='' --unchanged-line-format='' <(local_branches_with_tracking) <(remote_branches)) ; do
+    git branch -D $branch
+    count=$(echo $((count + 1)))
+done
+
+echo "Deleted $count local branches"
