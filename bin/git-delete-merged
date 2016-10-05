@@ -1,7 +1,6 @@
 #!/bin/bash
+# via https://github.com/dcosson/dotfiles/blob/master/misc/git-delete-merged
 #
-# via: https://github.com/dcosson/dotfiles/blob/master/misc/git-delete-merged
-
 # Deletes all local branches that are set up to track a remote branch on the origin remote, where the
 # remote branch has been deleted.
 #
