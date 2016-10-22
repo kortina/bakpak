@@ -13,6 +13,11 @@ try:
 except ImportError:
     from unittest import TestCase
 
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
+
 
 """
 Works with .eml files you have downloaded with another script such as
@@ -60,78 +65,6 @@ for k in address_headers:
 distinct_addresses = set()
 
 
-def normalize_string(string):
-    """strip:
-    " | \t \r \n
-    and replace multi space with single spaces.
-
-    strip leading and trailing single and double quotes
-
-    used for names and emails."""
-    if string:
-        string = re.sub(r"[\"\n\r\t\s\|]+", " ", string)
-        string = string.strip()
-        string = string.strip("'")
-        string = string.strip('"')
-    return string
-
-
-def normalize_email(address):
-    if address:
-        address = re.sub(r"['\<\>]", "", address)
-        address = normalize_string(address)
-        address = address.lower()
-    return address
-
-
-def normalize_name(name):
-    if name:
-        name = normalize_string(name)
-        # if no capitals or @'s , then titlecase
-        if not re.search(r"[A-Z@]", name):
-            name = name.title()
-        name = flip_last_first(name)
-    return name
-
-
-def flip_last_first(name):
-    """Attempt to recognize name in
-    Last, First
-    form and flip to
-    First Last.
-
-    Try to be smart enough to correctly handle things like
-    Ken Griffey, Jr.
-    """
-    if not name:
-        return name
-    parts = name.split(",")
-    if len(parts) != 2:
-        return name
-    bef = parts[0].strip()
-    aft = parts[1].strip()
-    flipped = "{0} {1}".format(aft, bef)
-    if re.search(r"[\(\)\<\>\&]", aft):
-        return name
-    if re.search(r"^and ", aft) or re.search(r" and ", aft):
-        return name
-    # 2-4 non-vowels, probably a suffix
-    if re.search(r"^[^aeiouyAEIOUY]{2,4}$", aft):
-        return name
-    # 2-4 roman numerals, probably a suffix
-    if re.search(r"^[ixvIXV]{2,4}$", aft):
-        return name
-    known_suffixes = ['cpa', 'do', 'edd', 'esq', 'inc', 'mba', 'od',
-                      'osb', 'ret', 'usa', 'usaf']
-    # known suffixes with vowels
-    if aft.lower().replace(".", "") in known_suffixes:
-        return name
-    # 2-3 letters followed by period, probably a suffix
-    if re.search(r"^\w{2,3}\.$", aft):
-        return name
-    return flipped
-
-
 def pair(name, email):
     return "\"{0}\"\t{1}".format(name, email)
 
@@ -173,6 +106,102 @@ def task_function(task):
         return db_finish
 
 
+class Person:
+    def __init__(self, name, email):
+        self.name = self.normalize_name(name)
+        self.email = self.normalize_email(email)
+
+    @classmethod
+    def clean_header(klass, s):
+        """remove linebreaks and tabs"""
+        return re.sub(r"[\n\r\t]+", " ", s).strip()
+
+    @classmethod
+    def from_eml(klass, eml, header):
+        """ Extract all the people from an eml contained in the header.
+        eml: email.message.Message
+        header: string, eg "From"
+
+        @see:
+        https://docs.python.org/2/library/email.message.html#email.message.Message.get_all
+        """
+        tuples = getaddresses(map(klass.clean_header,
+                                  eml.get_all(header, [])))
+        return [klass(t[0], t[1]) for t in tuples]
+
+    @classmethod
+    def normalize_string(klass, string):
+        """strip:
+        " | \t \r \n
+        and replace multi space with single spaces.
+
+        strip leading and trailing single and double quotes
+
+        used for names and emails."""
+        if string:
+            string = re.sub(r"[\"\n\r\t\s\|]+", " ", string)
+            string = string.strip()
+            string = string.strip("'")
+            string = string.strip('"')
+        return string
+
+    @classmethod
+    def normalize_email(klass, address):
+        if address:
+            address = re.sub(r"['\<\>]", "", address)
+            address = klass.normalize_string(address)
+            address = address.lower()
+        return address
+
+    @classmethod
+    def normalize_name(klass, name):
+        if name:
+            name = klass.normalize_string(name)
+            # if no capitals or @'s , then titlecase
+            if not re.search(r"[A-Z@]", name):
+                name = name.title()
+            name = klass.flip_last_first(name)
+        return name
+
+    @classmethod
+    def flip_last_first(klass, name):
+        """Attempt to recognize name in
+        Last, First
+        form and flip to
+        First Last.
+
+        Try to be smart enough to correctly handle things like
+        Ken Griffey, Jr.
+        """
+        if not name:
+            return name
+        parts = name.split(",")
+        if len(parts) != 2:
+            return name
+        bef = parts[0].strip()
+        aft = parts[1].strip()
+        flipped = "{0} {1}".format(aft, bef)
+        if re.search(r"[\(\)\<\>\&]", aft):
+            return name
+        if re.search(r"^and ", aft) or re.search(r" and ", aft):
+            return name
+        # 2-4 non-vowels, probably a suffix
+        if re.search(r"^[^aeiouyAEIOUY]{2,4}$", aft):
+            return name
+        # 2-4 roman numerals, probably a suffix
+        if re.search(r"^[ixvIXV]{2,4}$", aft):
+            return name
+        known_suffixes = ['cpa', 'do', 'edd', 'esq', 'inc', 'mba', 'od',
+                          'osb', 'ret', 'usa', 'usaf']
+        # known suffixes with vowels
+        if aft.lower().replace(".", "") in known_suffixes:
+            return name
+        # 2-3 letters followed by period, probably a suffix
+        if re.search(r"^\w{2,3}\.$", aft):
+            return name
+        return flipped
+
+
 def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
     filenames = os.listdir(directory)
     num_files = len(filenames)
@@ -183,110 +212,95 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
         if not str.lower(filename[-3:]) == "eml":
             continue
 
-        msg = message_from_file(open(filename))
+        eml = message_from_file(open(filename))
+        # sender = Person.from_eml(eml, "From")[0]
+
         for header in address_headers:
-            v = msg.get_all(header)
-            if v:
-                for person in tuples_for_address_list(v):
-                    name = normalize_name(person[0])
-                    email = normalize_email(person[1])
-                    if "," in email:
-                        emsg = "DISCARDING BAD EMAIL. person: {0} email: {1}"
-                        emsg = emsg.format(person, email)
-                        logging.warning(emsg)
-                    combined = pair(name, email)
-                    distinct_addresses.add(combined)
-                    top_addresses[header][combined] += 1
-                    if task == "insert":
-                        DB.insert_or_increment(name, email)
+            for p in Person.from_eml(eml, header):
+                if "," in p.email:
+                    emsg = "DISCARDING BAD EMAIL. name: {1} email: {2}"
+                    emsg = emsg.format(p.name, p.email)
+                    logging.warning(emsg)
+                combined = pair(p.name, p.email)
+                distinct_addresses.add(combined)
+                top_addresses[header][combined] += 1
+                if task == "insert":
+                    DB.insert_or_increment(p.name, p.email)
 
         if max_iter and i >= max_iter:
             break
 
 
-def tuples_for_address_list(value_list):
-    """Parse list returned by email.message.Message.get_all
-    https://docs.python.org/2/library/email.message.html#email.message.Message.get_all
+class PersonTests(TestCase):
+    def test_init(self):
+        p = Person("Andrew", "kortina@gmail.com")
+        self.assertEqual(p.name, "Andrew")
+        self.assertEqual(p.email, "kortina@gmail.com")
 
-    eg, a list of the form
-    ['kortina@venmo.com, magdon@venmo.com, shreyans@venmo.com']
-    for an email with the 'to' header
-    'kortina@venmo.com, magdon@venmo.com, shreyans@venmo.com'
+    def test_normalize_header(self):
+        self.assertEqual(Person.clean_header("\t\"a\r b\" <a@b.c>,\r\n"),
+                         "\"a  b\" <a@b.c>,")
 
-    returns
-    [('', 'kortina@venmo.com'), ('', 'magdon@venmo.com'),
-     ('', 'shreyans@venmo.com')]
-    """
-    return getaddresses(value_list) or []
-
-
-class ParseNameTests(TestCase):
-    def test_last_first(self):
-        self.assertEqual(flip_last_first("Ken Griffey, Jr."),
-                         "Ken Griffey, Jr.")
-        self.assertEqual(flip_last_first("ken griffey, jr"),
-                         "ken griffey, jr")
-        self.assertEqual(flip_last_first("Smith, Mary Jo"),
-                         "Mary Jo Smith")
-        self.assertEqual(flip_last_first("Mary Smith, Esq."),
-                         "Mary Smith, Esq.")
-        self.assertEqual(flip_last_first("mary smith, esq"),
-                         "mary smith, esq")
-        self.assertEqual(flip_last_first("Anderson, Paul T"),
-                         "Paul T Anderson")
-        self.assertEqual(flip_last_first("Anderson, Paul T."),
-                         "Paul T. Anderson")
-        self.assertEqual(flip_last_first("Multiple, Commas, Noop"),
-                         "Multiple, Commas, Noop")
-        self.assertEqual(flip_last_first("Smith, Alex (US - New York)"),
-                         "Smith, Alex (US - New York)")
-        self.assertEqual(flip_last_first("Crosby, Stills, & Nash"),
-                         "Crosby, Stills, & Nash")
-        self.assertEqual(flip_last_first("Crosby, Stills, and Nash"),
-                         "Crosby, Stills, and Nash")
-        self.assertEqual(flip_last_first("Crosby, Stills and Nash"),
-                         "Crosby, Stills and Nash")
-        self.assertEqual(flip_last_first("Smith, Amy"),
-                         "Amy Smith")
-        self.assertEqual(flip_last_first("John Davis, II"),
-                         "John Davis, II")
-        self.assertEqual(flip_last_first("John Davis, III"),
-                         "John Davis, III")
-        self.assertEqual(flip_last_first("John Davis, iv"),
-                         "John Davis, iv")
-        self.assertEqual(flip_last_first("John Davis, MBA"),
-                         "John Davis, MBA")
-
-
-class ParseEmailTests(TestCase):
-    def test_tuples(self):
+    def test_from_eml(self):
+        eml = MagicMock()
         header = """"Sandy [Test]" <sandy@test.com>, suzi@test.com"""
-        value_list = [header]
-        tuples = tuples_for_address_list(value_list)
-        expected_name = "Sandy [Test]"
-        expected_email = "sandy@test.com"
-        tup = tuples[0]
-        self.assertEqual(expected_name, tup[0])
-        self.assertEqual(expected_email, tup[1])
-        expected_name = ""
-        expected_email = "suzi@test.com"
-        tup = tuples[1]
-        self.assertEqual(expected_name, tup[0])
-        self.assertEqual(expected_email, tup[1])
+        eml.get_all.return_value = [header]
+        people = Person.from_eml(eml, "From")
+        self.assertEqual(people[0].name, "Sandy [Test]")
+        self.assertEqual(people[0].email, "sandy@test.com")
+        self.assertEqual(people[1].name, "")
+        self.assertEqual(people[1].email, "suzi@test.com")
 
     def test_normalize_string(self):
-        self.assertEqual(normalize_string("\ta\r\n b "), "a b")
+        self.assertEqual(Person.normalize_string("\ta\r\n b "), "a b")
 
     def test_normalize_email(self):
-        self.assertEqual(normalize_email("\t\nB@TEST.com "), "b@test.com")
+        self.assertEqual(Person.normalize_email("\t\nB@TEST.com "),
+                         "b@test.com")
 
     def test_normalize_name(self):
-        self.assertEqual(normalize_name("\t\nAdam Smith "), "Adam Smith")
+        self.assertEqual(Person.normalize_name("\t\nAdam Smith "),
+                         "Adam Smith")
 
     def test_domain(self):
         self.assertEqual(email_domain("joe@test.net"), "test.net")
         self.assertEqual(email_domain("joe,test.net"), None)
 
+    def test_last_first(self):
+        self.assertEqual(Person.flip_last_first("Ken Griffey, Jr."),
+                         "Ken Griffey, Jr.")
+        self.assertEqual(Person.flip_last_first("ken griffey, jr"),
+                         "ken griffey, jr")
+        self.assertEqual(Person.flip_last_first("Smith, Mary Jo"),
+                         "Mary Jo Smith")
+        self.assertEqual(Person.flip_last_first("Mary Smith, Esq."),
+                         "Mary Smith, Esq.")
+        self.assertEqual(Person.flip_last_first("mary smith, esq"),
+                         "mary smith, esq")
+        self.assertEqual(Person.flip_last_first("Anderson, Paul T"),
+                         "Paul T Anderson")
+        self.assertEqual(Person.flip_last_first("Anderson, Paul T."),
+                         "Paul T. Anderson")
+        self.assertEqual(Person.flip_last_first("Multiple, Commas, Noop"),
+                         "Multiple, Commas, Noop")
+        self.assertEqual(Person.flip_last_first("Smith, Alex (US - New York)"),
+                         "Smith, Alex (US - New York)")
+        self.assertEqual(Person.flip_last_first("Crosby, Stills, & Nash"),
+                         "Crosby, Stills, & Nash")
+        self.assertEqual(Person.flip_last_first("Crosby, Stills, and Nash"),
+                         "Crosby, Stills, and Nash")
+        self.assertEqual(Person.flip_last_first("Crosby, Stills and Nash"),
+                         "Crosby, Stills and Nash")
+        self.assertEqual(Person.flip_last_first("Smith, Amy"),
+                         "Amy Smith")
+        self.assertEqual(Person.flip_last_first("John Davis, II"),
+                         "John Davis, II")
+        self.assertEqual(Person.flip_last_first("John Davis, III"),
+                         "John Davis, III")
+        self.assertEqual(Person.flip_last_first("John Davis, iv"),
+                         "John Davis, iv")
+        self.assertEqual(Person.flip_last_first("John Davis, MBA"),
+                         "John Davis, MBA")
 
 def dict_factory(cursor, row):
     d = {}
@@ -389,7 +403,10 @@ class DB(object):
                                 name VARCHAR(255),
                                 email VARCHAR(255),
                                 domain VARCHAR(255),
-                                occurs INT
+                                occurs INT,
+                                from_me INT,
+                                from_them INT,
+                                from_other INT
                                 );""")
         klass.query("""CREATE INDEX IF NOT EXISTS
                                 name_ix ON contacts(name);""")
