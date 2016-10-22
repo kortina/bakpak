@@ -27,13 +27,15 @@ usage = """
 Run in a direcotry containing eml files to extract headers:
 
     cd /dir/with/emails && \
-    python /path/to/gmailutils/extract_headers.py --task=all --min=0
+    python /path/to/gmailutils/extract_headers.py --task=all --min=0 \
+    --me=me@gmail.com
 
 Params:
 --task (required)  "all" or "top"
                    What to do with the emails extracted.
                    "top" - prints summary of most popular emails
                    "all" - print list of all emails encountered
+--me (optional)    email address of owner of the inbox you are processing
 --min (optional)   offset, starting point
 --max (optional)   limit, ending point
 
@@ -41,6 +43,7 @@ Params:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--me')  # owner of inbox
     parser.add_argument('--min')
     parser.add_argument('--max')
     parser.add_argument('--task')
@@ -202,7 +205,8 @@ class Person:
         return flipped
 
 
-def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
+def process_emails_in_dir(directory, min_iter=0, max_iter=0,
+                          task=None, me=None):
     filenames = os.listdir(directory)
     num_files = len(filenames)
 
@@ -213,7 +217,7 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
             continue
 
         eml = message_from_file(open(filename))
-        # sender = Person.from_eml(eml, "From")[0]
+        sender = Person.from_eml(eml, "From")[0]
 
         for header in address_headers:
             for p in Person.from_eml(eml, header):
@@ -221,11 +225,18 @@ def process_emails_in_dir(directory, min_iter=0, max_iter=0, task=None):
                     emsg = "DISCARDING BAD EMAIL. name: {1} email: {2}"
                     emsg = emsg.format(p.name, p.email)
                     logging.warning(emsg)
+
+                _sender = "other"
+                if sender.email == me:
+                    _sender = "me"
+                elif sender.email == p.email:
+                    _sender = "them"
+
                 combined = pair(p.name, p.email)
                 distinct_addresses.add(combined)
                 top_addresses[header][combined] += 1
                 if task == "insert":
-                    DB.insert_or_increment(p.name, p.email)
+                    DB.insert_or_increment(p.name, p.email, _sender)
 
         if max_iter and i >= max_iter:
             break
@@ -301,6 +312,7 @@ class PersonTests(TestCase):
                          "John Davis, iv")
         self.assertEqual(Person.flip_last_first("John Davis, MBA"),
                          "John Davis, MBA")
+
 
 def dict_factory(cursor, row):
     d = {}
@@ -441,7 +453,7 @@ class DB(object):
             return row.get('c', 0) > 0
 
     @classmethod
-    def insert(klass, name, email):
+    def insert(klass, name, email, sender):
         if DB.exclude(email) or DB.exclude_on_name(name):
             logging.warning("EXCLUDING: {0} {1}".format(name, email))
             return
@@ -452,24 +464,35 @@ class DB(object):
             logging.warning(emsg.format(name, email))
             return
 
-        sql = """INSERT INTO contacts (pair, name, email, domain, occurs) \
-                 VALUES (?, ?, ?, ?, 1);"""
-        return klass.query(sql, [p, name, email, domain])
+        from_me, from_them, from_other = 0, 0, 0
+        from_me = 1 if sender == "me" else 0
+        from_them = 1 if sender == "them" else 0
+        from_other = 1 if sender == "other" else 0
+
+        sql = """INSERT INTO contacts (pair, name, email, domain, \
+                 occurs, from_me, from_them, from_other) \
+                 VALUES (?, ?, ?, ?, 1, ?, ?, ?);"""
+        return klass.query(sql, [p, name, email, domain,
+                           from_me, from_them, from_other])
 
     @classmethod
-    def increment(klass, name, email):
+    def increment(klass, name, email, sender):
         p = pair_lower(name, email)
-        sql = """UPDATE contacts SET occurs = occurs + 1 WHERE pair = ?;"""
+        sender = "from_{0}".format(sender)
+        sql = """UPDATE contacts SET occurs = occurs + 1, \
+                 {s} = {s} + 1 WHERE pair = ?;"""
+        sql = sql.format(s=sender)
         return klass.query(sql, [p])
 
     @classmethod
-    def insert_or_increment(klass, name, email):
+    def insert_or_increment(klass, name, email, sender):
         if DB.exists(name, email):
-            logging.info("increment {0} {1}".format(name, email))
-            return DB.increment(name, email)
+            logging.info("increment {0} {1} from_{2}".format(name,
+                                                             email, sender))
+            return DB.increment(name, email, sender)
         else:
-            logging.info("insert {0} {1}".format(name, email))
-            return DB.insert(name, email)
+            logging.info("insert {0} {1} from_{2}".format(name, email, sender))
+            return DB.insert(name, email, sender)
 
     @classmethod
     def get(klass, name, email):
@@ -513,7 +536,7 @@ class DBTests(TestCase):
         ex = DB.exists(name, email)
         self.assertFalse(ex)
 
-        DB.insert(name, email)
+        DB.insert(name, email, "me")
         ex = DB.exists(name, email)
         self.assertTrue(ex)
 
@@ -524,14 +547,20 @@ class DBTests(TestCase):
         email = "test@email.com"
         DB.delete(name, email)
 
-        DB.insert(name, email)
+        DB.insert(name, email, "me")
         row = DB.get(name, email)
         self.assertEqual(row['occurs'], 1)
+        self.assertEqual(row['from_them'], 0)
+        self.assertEqual(row['from_other'], 0)
+        self.assertEqual(row['from_me'], 1)
 
-        DB.increment(name, email)
+        DB.increment(name, email, "them")
 
         row = DB.get(name, email)
         self.assertEqual(row['occurs'], 2)
+        self.assertEqual(row['from_them'], 1)
+        self.assertEqual(row['from_other'], 0)
+        self.assertEqual(row['from_me'], 1)
 
         DB.delete(name, email)
 
@@ -540,14 +569,20 @@ class DBTests(TestCase):
         email = "test@email.com"
         DB.delete(name, email)
 
-        DB.insert_or_increment(name, email)
+        DB.insert_or_increment(name, email, "me")
         row = DB.get(name, email)
         self.assertEqual(row['occurs'], 1)
+        self.assertEqual(row['from_them'], 0)
+        self.assertEqual(row['from_other'], 0)
+        self.assertEqual(row['from_me'], 1)
 
-        DB.insert_or_increment(name, email)
+        DB.insert_or_increment(name, email, "other")
 
         row = DB.get(name, email)
         self.assertEqual(row['occurs'], 2)
+        self.assertEqual(row['from_them'], 0)
+        self.assertEqual(row['from_other'], 1)
+        self.assertEqual(row['from_me'], 1)
 
         DB.delete(name, email)
 
@@ -567,6 +602,7 @@ ORDER BY name, occurs DESC;
 if __name__ == "__main__":
     min_iter = int(args.min or 0)
     max_iter = int(args.max or 0)
+    me = args.me
     task = args.task
     task_func = task_function(task)
     if args.vvverbose:
@@ -582,7 +618,7 @@ if __name__ == "__main__":
     if not task_func:
         raise usage
     try:
-        process_emails_in_dir("./", min_iter, max_iter, task)
+        process_emails_in_dir("./", min_iter, max_iter, task, me)
     except KeyboardInterrupt as kbe:
         raise
     finally:
