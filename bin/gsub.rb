@@ -45,6 +45,9 @@ abort("Invalid # of arguments.\n#{usage}") unless argcount == 2
 #puts "rep is #{rep}"
 comp = Regexp.compile(reg, *comp_args)
 
+# had to mod to get actual tabs etc inserted
+rep = rep.gsub("\\t", "\t")
+rep = rep.gsub("\\n", "\n")
 while line = gets
     puts line.gsub(comp, rep)
 end
